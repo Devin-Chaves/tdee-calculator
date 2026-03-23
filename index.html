@@ -189,9 +189,13 @@
         if(invalid){
           const hasNegative = kcalM < 0 || kcal30 < 0 || kcal15 < 0;
           invalid.style.opacity = hasNegative ? "1" : "0";
+          if(cta && hasNegative){
+            cta.style.opacity="0";
+            cta.style.pointerEvents="none";
+          }
         }
 
-        showCTA();
+        if(!invalid || !(kcalM < 0 || kcal30 < 0 || kcal15 < 0)) showCTA();
         hasCalculated = true;
       };
 
