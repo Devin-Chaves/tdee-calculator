@@ -1,0 +1,291 @@
+<div class="w-embed w-script">
+  <style>
+    /* Defaults (JS will override with inline display for reliability) */
+    #tdee-imperial-fields { display:block; }
+    #tdee-metric-fields   { display:none; }
+
+    /* Animations & UI polish kept minimal here (your page CSS handles most) */
+    .tdee-result__row { transition: background-color .35s ease; }
+    .tdee-result__copy { opacity: 0; transition: opacity .25s ease; }
+    .tdee-result__cals { color:#C2C2C2; transition: color .3s ease; font-variant-numeric: tabular-nums; }
+
+    /* CTA reveal */
+    .tdee-cta{ display:none; opacity:0; height:0; overflow:hidden; pointer-events:none;
+      transition:height .35s cubic-bezier(0.25,1,0.5,1), opacity .35s ease;
+    }
+
+    /* Preset buttons */
+    .tdee-presets{margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;}
+    .tdee-presets button{
+      font-size:12px;padding:6px 8px;border:1px solid #e5e5e5;background:#f7f7f7;
+      border-radius:6px;cursor:pointer;
+    }
+
+    /* Number inputs: remove spinners */
+    .tdee-wrap input[type="number"]::-webkit-inner-spin-button,
+    .tdee-wrap input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+    .tdee-wrap input[type="number"]{-moz-appearance:textfield;}
+
+    /* Your exact 24×24 custom select arrow */
+    .tdee-wrap select{
+      appearance:none;-webkit-appearance:none;-moz-appearance:none;
+      background-image:url("data:image/svg+xml;utf8,<svg width='24' height='24' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M20.0306 9.53063L12.5306 17.0306C12.4609 17.1004 12.3782 17.1557 12.2871 17.1934C12.1961 17.2312 12.0985 17.2506 11.9999 17.2506C11.9014 17.2506 11.8038 17.2312 11.7127 17.1934C11.6217 17.1557 11.539 17.1004 11.4693 17.0306L3.9693 9.53063C3.82857 9.3899 3.74951 9.19903 3.74951 9.00001C3.74951 8.80098 3.82857 8.61011 3.9693 8.46938C4.11003 8.32865 4.30091 8.24959 4.49993 8.24959C4.69895 8.24959 4.88982 8.32865 5.03055 8.46938L11.9999 15.4397L18.9693 8.46938C19.039 8.3997 19.1217 8.34442 19.2128 8.30671C19.3038 8.269 19.4014 8.24959 19.4999 8.24959C19.5985 8.24959 19.6961 8.269 19.7871 8.30671C19.8781 8.34442 19.9609 8.3997 20.0306 8.46938C20.1002 8.53906 20.1555 8.62179 20.1932 8.71283C20.2309 8.80388 20.2503 8.90146 20.2503 9.00001C20.2503 9.09855 20.2309 9.19613 20.1932 9.28718C20.1555 9.37822 20.1002 9.46095 20.0306 9.53063Z' fill='%235F5E5A'/></svg>");
+      background-repeat:no-repeat;background-position:right 1rem center;background-size:24px 24px;
+      padding-right:2.5rem;
+    }
+  </style>
+
+  <script>
+  (function(){
+    if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init); else init();
+
+    function init(){
+      const wrap=document.querySelector(".tdee-wrap"); if(!wrap) return;
+
+      /* ---------- DOM refs ---------- */
+      const $ = s => wrap.querySelector(s);
+      const $$ = s => Array.from(wrap.querySelectorAll(s));
+
+      const groupImp = $("#tdee-imperial-fields");
+      const groupMet = $("#tdee-metric-fields");
+      const sexBtns  = $$(".tdee-sex-btn");
+      const switchLinks = $$(".tdee-switch-link");
+      const cta = wrap.querySelector(".tdee-cta");
+
+      const age=$("#tdee-age"), act=$("#tdee-activity"), bf=$("#tdee-body-fat");
+      const ft=$("#tdee-feet"), inch=$("#tdee-inches"), lb=$("#tdee-pounds"), goalLb=$("#tdee-goal-pounds");
+      const cm=$("#tdee-height-cm"), kg=$("#tdee-weight-kg"), goalKg=$("#tdee-goal-weight-kg");
+
+      const rows   = $$(".tdee-result__row");
+      const maintainSub = $("#tdee-maintain-pounds");
+      const w30Sub = $("#tdee-30-weeks-pounds");
+      const w15Sub = $("#tdee-15-weeks-pounds");
+      const maintainCals = $("#tdee-maintain-cals");
+      const w30Cals = $("#tdee-30-weeks-cals");
+      const w15Cals = $("#tdee-15-weeks-cals");
+
+      /* ---------- State ---------- */
+      const KG_PER_LB=0.45359237, LB_PER_KG=2.2046226218, CAL_PER_LB=3500;
+      let sex="female";
+      let isMetric = getComputedStyle(groupMet).display !== "none"; // read initial reality
+      let hasCalculated=false, timer=null;
+
+      /* ---------- Helpers ---------- */
+      const r1 = n => Math.round(n*10)/10;
+      const plural = (v,u) => (Math.abs(v)===1 ? u : u+"s");
+
+      const setUnits = (metric) => {
+        isMetric = !!metric;
+        groupImp.style.display = isMetric ? "none"  : "block";
+        groupMet.style.display = isMetric ? "block" : "none";
+      };
+
+      const readyToCalc = () => {
+        const a=+age?.value||0, actVal=+act?.value||0, stub=act?.value==="stub-option";
+        const haveH = isMetric ? (+cm?.value>0) : ((+ft?.value>0)||(+inch?.value>0));
+        const haveW = isMetric ? (+kg?.value>0) : (+lb?.value>0);
+        const haveG = isMetric ? (+goalKg?.value>0) : (+goalLb?.value>0);
+        return a>0 && haveH && haveW && haveG && actVal>0 && !stub;
+      };
+
+      const countUp = (el,end) => {
+        const dur=1800, start=Math.max(0, end - Math.max(300, end*.3));
+        const t0=performance.now(), ease=t=>1-Math.pow(1-t,3);
+        const run=(el._rid=(el._rid||0)+1);
+        const step=t=>{
+          if(el._rid!==run) return;
+          const p=Math.min((t-t0)/dur,1);
+          const v=Math.floor(start + (end-start)*ease(p));
+          el.textContent = v.toLocaleString();
+          if(p<1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      };
+
+      const showCTA = () => {
+        if(!cta || cta.dataset.shown==="true") return;
+        cta.dataset.shown="true";
+        cta.style.display="block";
+        requestAnimationFrame(()=>{
+          const full=cta.scrollHeight||200;
+          cta.style.height="0";
+          requestAnimationFrame(()=>{
+            cta.style.height=full+"px";
+            setTimeout(()=>{
+              cta.style.opacity="1";
+              cta.style.pointerEvents="auto";
+            },150);
+          });
+        });
+      };
+
+      const doCalc = () => {
+        if(!readyToCalc()) return;
+
+        const a=+age.value, actVal=+act.value;
+        let cmVal=0, kgVal=0, goalKgVal=0, curr=0, goal=0;
+
+        if(!isMetric){
+          const ftv=+ft.value||0, inchv=+inch.value||0, lbv=+lb.value||0, glb=+goalLb.value||0;
+          cmVal=(ftv*12+inchv)*2.54; kgVal=lbv*KG_PER_LB; goalKgVal=glb*KG_PER_LB; curr=lbv; goal=glb;
+        }else{
+          cmVal=+cm.value||0; kgVal=+kg.value||0; goalKgVal=+goalKg.value||0; curr=kgVal; goal=goalKgVal;
+        }
+        if(!kgVal||!cmVal) return;
+
+        const bfVal=+bf.value||0;
+        const bmr = bfVal>0
+          ? (370 + 21.6*(kgVal*(1-bfVal/100))) // Katch-McArdle when BF% provided
+          : (10*kgVal + 6.25*cmVal - 5*a + (sex==="male"?5:-161)); // Mifflin-St Jeor fallback
+        const tdee = bmr * actVal;
+
+        const unit = isMetric ? "kg" : "lb";
+        const haveGoal = goal > 0;
+        const currKg = isMetric ? curr : curr*KG_PER_LB;
+        const goalKgReal = isMetric ? goal : goal*KG_PER_LB;
+        const deltaKg = haveGoal ? (currKg - goalKgReal) : 0;
+        const deltaUser = isMetric ? deltaKg : deltaKg * LB_PER_KG;
+
+        const rate30 = haveGoal ? (deltaUser/30) : 0;
+        const rate15 = haveGoal ? (deltaUser/15) : 0;
+        const dailyDelta = r => { const rLb = isMetric ? r*LB_PER_KG : r; return (rLb*CAL_PER_LB)/7; };
+
+        const kcalM = Math.round(tdee);
+        const kcal30 = haveGoal ? Math.round(tdee - dailyDelta(rate30)) : kcalM;
+        const kcal15 = haveGoal ? Math.round(tdee - dailyDelta(rate15)) : kcalM;
+
+        /* Copy */
+        maintainSub.textContent = haveGoal ? `Stay at ${r1(curr)} ${unit}` : `Stay at your current weight`;
+        const rateTxt = r => (!haveGoal||r===0) ? "No weekly change" : `${r>0?"Lose":"Gain"} ${r1(Math.abs(r))} ${plural(r1(Math.abs(r)), unit)} per week`;
+        w30Sub.textContent = rateTxt(rate30);
+        w15Sub.textContent = rateTxt(rate15);
+
+        /* Animate rows + numbers */
+        const rowDelay=260, inDelay=280;
+        rows.forEach((row,i)=>{
+          setTimeout(()=>{
+            if(row.classList.contains("tdee-result__row--30")) row.style.backgroundColor="#F7FAFB";
+            if(row.classList.contains("tdee-result__row--15")) row.style.backgroundColor="#EBF2F6";
+            setTimeout(()=>{
+              row.querySelector(".tdee-result__copy")?.style.setProperty("opacity","1");
+              const cal=row.querySelector(".tdee-result__cals");
+              if(cal){
+                cal.style.color="#31302F";
+                const tgt = cal.id==="tdee-maintain-cals" ? kcalM :
+                            cal.id==="tdee-30-weeks-cals" ? kcal30 : kcal15;
+                countUp(cal, tgt);
+              }
+            }, inDelay);
+          }, i*rowDelay);
+        });
+
+        showCTA();
+        hasCalculated = true;
+      };
+
+      /* ---------- Actions ---------- */
+      // Sex toggle
+      sexBtns.forEach(btn=>{
+        btn.addEventListener("click",e=>{
+          e.preventDefault();
+          sex = btn.dataset.sex || "female";
+          sexBtns.forEach(x=>{
+            const on = x===btn;
+            x.classList.toggle("active", on);
+            x.setAttribute("aria-pressed", on ? "true" : "false");
+          });
+          if(hasCalculated) doCalc();
+        });
+      });
+
+      // Unit toggle (explicit display control)
+      switchLinks.forEach(link=>{
+        link.addEventListener("click", e=>{
+          e.preventDefault();
+          const mode = (link.dataset.mode||"").toLowerCase();
+          if(mode==="metric" && !isMetric) setUnits(true);
+          if(mode==="imperial" && isMetric) setUnits(false);
+          if(hasCalculated) doCalc();
+        });
+      });
+
+      // Debounced auto-calc on any input/selection (after requirements met)
+      const trigger = () => { clearTimeout(timer); timer = setTimeout(()=>{ if(hasCalculated || readyToCalc()) doCalc(); }, 350); };
+      $$(".tdee-wrap input, .tdee-wrap select").forEach(el=>{
+        el.addEventListener("input", trigger);
+        el.addEventListener("change", trigger);
+      });
+
+      /* ---------- Presets: show in Designer or *.webflow.io only ---------- */
+      const shouldShowPresets = () => {
+        const host = location.hostname || "";
+        const isStaging = /\.webflow\.io$/i.test(host);
+        const isDesignerNow =
+          (window.Webflow && typeof window.Webflow.env==="function" && window.Webflow.env("design")) ||
+          document.documentElement.classList.contains("w-mod-design") ||
+          document.documentElement.getAttribute("data-wf-design")==="true";
+        return isDesignerNow;
+      };
+
+      if(shouldShowPresets()){
+        // find a mount point: prefer .tdee-actions, else end of form, else before .tdee-output
+        let mount = wrap.querySelector(".tdee-actions")
+                 || wrap.querySelector("form#wf-form-tdee")
+                 || wrap.querySelector(".tdee-form")
+                 || wrap;
+        if(mount && !wrap.querySelector(".tdee-presets")){
+          const p=document.createElement("div");
+          p.className="tdee-presets";
+          p.innerHTML=`<button type="button" data-p="male_avg">Avg Male</button>
+                       <button type="button" data-p="female_avg">Avg Female</button>
+                       <button type="button" data-p="male_fit">Fit Male</button>`;
+          // If mount is a form, put presets before the actions if present; otherwise append
+          if(mount.classList && mount.classList.contains("tdee-actions")){
+            mount.parentNode.insertBefore(p, mount);
+          }else{
+            mount.appendChild(p);
+          }
+
+          p.addEventListener("click", e=>{
+            const btn=e.target.closest("button[data-p]"); if(!btn) return;
+            const sv=(id,val)=>{ const el=$("#"+id); if(el) el.value=val; };
+            const pickSex=s=>{
+              sex=s;
+              sexBtns.forEach(x=>{
+                const on=x.dataset.sex===s;
+                x.classList.toggle("active", on);
+                x.setAttribute("aria-pressed", on ? "true" : "false");
+              });
+            };
+
+            let a,ftv,inchv,lbv,g,actv;
+            const key=btn.dataset.p;
+            if(key==="male_avg"){ a=32; ftv=5; inchv=11; lbv=200; g=180; actv=1.55; pickSex("male"); }
+            else if(key==="female_avg"){ a=28; ftv=5; inchv=5; lbv=165; g=145; actv=1.375; pickSex("female"); }
+            else { a=30; ftv=5; inchv=10; lbv=175; g=165; actv=1.725; pickSex("male"); }
+
+            sv("tdee-age",a);
+            sv("tdee-feet",ftv); sv("tdee-inches",inchv);
+            sv("tdee-pounds",lbv); sv("tdee-goal-pounds",g);
+            sv("tdee-activity",actv);
+
+            const cmv=Math.round((ftv*12+inchv)*2.54);
+            const kgv=Math.round(lbv*KG_PER_LB);
+            const gkg=Math.round(g*KG_PER_LB);
+            sv("tdee-height-cm",cmv);
+            sv("tdee-weight-kg",kgv);
+            sv("tdee-goal-weight-kg",gkg);
+
+            setUnits(false); // presets start in imperial for clarity
+            hasCalculated = true; // allow immediate calc on presets
+            doCalc();
+          });
+        }
+      }
+
+      /* Ensure initial unit state is reflected inline (avoids CSS race) */
+      setUnits(isMetric);
+    }
+  })();
+  </script>
+</div>
