@@ -189,9 +189,14 @@
         if(invalid){
           const hasNegative = kcalM < 0 || kcal30 < 0 || kcal15 < 0;
           invalid.style.opacity = hasNegative ? "1" : "0";
-          if(cta && hasNegative){
+          if(cta && hasNegative && cta.dataset.shown==="true"){
             cta.style.opacity="0";
             cta.style.pointerEvents="none";
+            cta.style.height="0";
+            setTimeout(()=>{
+              cta.style.display="none";
+              cta.dataset.shown="false";
+            },350);
           }
         }
 
