@@ -184,6 +184,13 @@
           }, i*rowDelay);
         });
 
+        /* Show/hide invalid overlay when any result is negative */
+        const invalid = wrap.querySelector(".tdee-result__invalid");
+        if(invalid){
+          const hasNegative = kcalM < 0 || kcal30 < 0 || kcal15 < 0;
+          invalid.style.opacity = hasNegative ? "1" : "0";
+        }
+
         showCTA();
         hasCalculated = true;
       };
