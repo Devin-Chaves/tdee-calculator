@@ -295,6 +295,11 @@
         }
       }
 
+      /* Prevent scroll/mousewheel from changing number inputs */
+      $$("input[type='number']").forEach(el=>{
+        el.addEventListener("wheel", e=>{ e.preventDefault(); }, {passive:false});
+      });
+
       /* Ensure initial unit state is reflected inline (avoids CSS race) */
       setUnits(isMetric);
     }
