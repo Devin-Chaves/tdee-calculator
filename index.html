@@ -229,7 +229,7 @@
           (window.Webflow && typeof window.Webflow.env==="function" && window.Webflow.env("design")) ||
           document.documentElement.classList.contains("w-mod-design") ||
           document.documentElement.getAttribute("data-wf-design")==="true";
-        return isDesignerNow;
+        return isDesignerNow || isStaging;
       };
 
       if(shouldShowPresets()){
@@ -243,7 +243,10 @@
           p.className="tdee-presets";
           p.innerHTML=`<button type="button" data-p="male_avg">Avg Male</button>
                        <button type="button" data-p="female_avg">Avg Female</button>
-                       <button type="button" data-p="male_fit">Fit Male</button>`;
+                       <button type="button" data-p="male_fit">Fit Male</button>
+                       <button type="button" data-p="female_active">Active Female</button>
+                       <button type="button" data-p="male_heavy">Heavy Male</button>
+                       <button type="button" data-p="negative" style="background:#fee;border-color:#f99;">⚠ Negative Cal</button>`;
           // If mount is a form, put presets before the actions if present; otherwise append
           if(mount.classList && mount.classList.contains("tdee-actions")){
             mount.parentNode.insertBefore(p, mount);
@@ -267,6 +270,10 @@
             const key=btn.dataset.p;
             if(key==="male_avg"){ a=32; ftv=5; inchv=11; lbv=200; g=180; actv=1.55; pickSex("male"); }
             else if(key==="female_avg"){ a=28; ftv=5; inchv=5; lbv=165; g=145; actv=1.375; pickSex("female"); }
+            else if(key==="male_fit"){ a=30; ftv=5; inchv=10; lbv=175; g=165; actv=1.725; pickSex("male"); }
+            else if(key==="female_active"){ a=25; ftv=5; inchv=7; lbv=140; g=130; actv=1.725; pickSex("female"); }
+            else if(key==="male_heavy"){ a=40; ftv=6; inchv=1; lbv=280; g=220; actv=1.2; pickSex("male"); }
+            else if(key==="negative"){ a=45; ftv=5; inchv=6; lbv=300; g=100; actv=1.2; pickSex("male"); }
             else { a=30; ftv=5; inchv=10; lbv=175; g=165; actv=1.725; pickSex("male"); }
 
             sv("tdee-age",a);
